@@ -5,4 +5,5 @@
     <string name="spoofing_service_channel_name">Location Spoofer Service</string>
     <string name="spoofing_bg_notification_title">Location Spoofing Background Notification</string>
     <string name="close_joystick">Close Joystick</string>
+    <string name="record_route_notification_title">正在记录路线</string>
 </resources>

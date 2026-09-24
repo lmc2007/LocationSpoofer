@@ -9,6 +9,12 @@
             android:stopWithTask="false"
             android:foregroundServiceType="location" />
         <service
+            android:name=".RouteRecordService"
+            android:enabled="true"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="location" />
+        <service
             android:name=".FloatingJoystickService"
             android:enabled="true"
             android:exported="false" />

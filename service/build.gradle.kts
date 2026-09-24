@@ -31,6 +31,7 @@ kotlin {
 
 dependencies {
     implementation(project(":core-data"))
+    implementation(project(":core-geo"))
 
     implementation(libs.koin.android)
 
