@@ -445,6 +445,16 @@ class LocationHooker : XposedModule() {
                                 Thread.sleep(configPollIntervalMs)
                                 val newConfig = loadConfigFromDisk("poll")
 
+                                if (newConfig == null || !newConfig.optBoolean("active", false)) {
+                                    // 模拟未激活/已停止：停掉步时钟。
+                                    // 否则其线程会按最后一次的速度继续向宿主推步事件，
+                                    // 造成"停止模拟后步数仍在涨"。
+                                    try {
+                                        com.suseoaa.locationspoofer.xposed.hooks.gait.StepEventScheduler.stop()
+                                    } catch (_: Throwable) {}
+                                    continue
+                                }
+
                                 if (newConfig != null && newConfig.optBoolean("active", false)) {
                                     val currentLat = newConfig.optDouble("lat", 0.0)
                                     val currentLng = newConfig.optDouble("lng", 0.0)

@@ -95,6 +95,25 @@ object StepEventScheduler {
         }
     }
 
+    /**
+     * 停止模拟：速度归零并释放步时钟线程。
+     *
+     * 必须显式调用 —— 步时钟一旦启动就不再检查 active 状态，
+     * 若只在配置轮询的 active 分支同步配置，停止模拟后 cachedSpeedMs 会保持旧值，
+     * 线程继续按旧速度产步事件并推给宿主，表现为"已停止模拟但步数仍在涨"。
+     * 再次 [syncConfig] 会自动重启线程（[ensureStarted]），步数状态保留。
+     */
+    fun stop() {
+        synchronized(this) {
+            cachedSpeedMs = 0.0
+            handler?.removeCallbacksAndMessages(null)
+            handlerThread?.quitSafely()
+            handlerThread = null
+            handler = null
+            started = false
+        }
+    }
+
     /** libxposed 热重载前清理，防线程泄漏。 */
     fun shutdownForReload() {
         synchronized(this) {

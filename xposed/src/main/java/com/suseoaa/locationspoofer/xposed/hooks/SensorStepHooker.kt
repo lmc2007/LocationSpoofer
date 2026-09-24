@@ -51,6 +51,9 @@ object SensorStepHooker {
     @Volatile
     private var lastCounterOut = 0L
 
+    @Volatile
+    private var lastStepDiagAt = 0L
+
     private fun monotonicCounter(raw: Long): Long {
         val v = if (raw < lastCounterOut) lastCounterOut else raw
         lastCounterOut = v
@@ -397,8 +400,20 @@ object SensorStepHooker {
 
     /** 步时钟回调：向捕获的 listener 推送 counter/detector 事件（两路同源，不变量 #1）。 */
     private fun pushStepEvents(totalSteps: Long, classLoader: ClassLoader) {
+        // 步时钟停止后 cadence 归零，此时不得再向宿主推送步事件（兜底防线）
+        if (StepEventScheduler.currentCadence <= 0) return
         val listeners = capturedListeners.toList()
         if (listeners.isEmpty()) return
+
+        // 节流诊断：核对推送速率与 counter 步进（定位"步数涨得过快"类问题）
+        val diagNow = SystemClock.elapsedRealtime()
+        if (diagNow - lastStepDiagAt > 3000L) {
+            lastStepDiagAt = diagNow
+            XposedBridge.log(
+                "[DIAG] step-push total=$totalSteps cadence=${StepEventScheduler.currentCadence} " +
+                    "listeners=${listeners.size}"
+            )
+        }
         val mainHandler = try { Handler(Looper.getMainLooper()) } catch (_: Throwable) { null } ?: return
 
         for (entry in listeners) {
