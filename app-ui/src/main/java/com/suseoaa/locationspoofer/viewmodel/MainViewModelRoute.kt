@@ -9,6 +9,7 @@ import com.suseoaa.locationspoofer.data.model.RoutePlanStage
 import com.suseoaa.locationspoofer.data.model.RouteRunMode
 import com.suseoaa.locationspoofer.data.model.SavedLocation
 import com.suseoaa.locationspoofer.data.model.SimMode
+import kotlinx.coroutines.flow.StateFlow
 import com.suseoaa.locationspoofer.data.state.SpoofingState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -775,4 +776,32 @@ private fun MainViewModel.bearingBetween(from: RoutePoint, to: RoutePoint): Doub
     val y = kotlin.math.cos(lat1) * kotlin.math.sin(lat2) -
             kotlin.math.sin(lat1) * kotlin.math.cos(lat2) * kotlin.math.cos(dLng)
     return (Math.toDegrees(kotlin.math.atan2(x, y)) + 360) % 360
+}
+
+
+// ---------- 「记录路线」:实地采集 GPS 点位,结束存入路线库 ----------
+
+/** 开始记录:启动前台采集服务(真实 GPS,自身不在 hook scope 内,不受模拟影响) */
+internal fun MainViewModel.startRouteRecording() {
+    routeRecordController.start(context)
+}
+
+/** 停止记录:服务停采,快照保留(finished=true)等待保存/丢弃 */
+internal fun MainViewModel.stopRouteRecording() {
+    routeRecordController.stop(context)
+}
+
+/** 保存已记录路线到路线库;成功后清空暂存 */
+internal fun MainViewModel.saveRecordedRoute(name: String) {
+    viewModelScope.launch(Dispatchers.IO) {
+        val points = routeRecordController.consumeRecordedPoints()
+        if (points.size < 2) return@launch
+        locationRepository.insertSavedRoute(name.ifBlank { "记录路线" }, points)
+        _uiState.update { it.copy(savedRoutes = settingsRepository.getSavedRoutes()) }
+    }
+}
+
+/** 丢弃已记录路线 */
+internal fun MainViewModel.discardRecordedRoute() {
+    routeRecordController.consumeRecordedPoints()
 }

@@ -77,7 +77,11 @@ import com.suseoaa.locationspoofer.viewmodel.setStepCadenceSpm
 import com.suseoaa.locationspoofer.viewmodel.setStopAtDestination
 import com.suseoaa.locationspoofer.viewmodel.setUseRealRoute
 import com.suseoaa.locationspoofer.viewmodel.startRoutePlanning
+import com.suseoaa.locationspoofer.viewmodel.discardRecordedRoute
+import com.suseoaa.locationspoofer.viewmodel.saveRecordedRoute
+import com.suseoaa.locationspoofer.viewmodel.startRouteRecording
 import com.suseoaa.locationspoofer.viewmodel.stopRoutePlanning
+import com.suseoaa.locationspoofer.viewmodel.stopRouteRecording
 import com.suseoaa.locationspoofer.viewmodel.toggleEnableJitter
 import com.suseoaa.locationspoofer.viewmodel.toggleMockBluetooth
 import com.suseoaa.locationspoofer.viewmodel.toggleMockCell
@@ -119,6 +123,10 @@ fun RouteTab(
     val isRunning = stage == RoutePlanStage.RUNNING
     val isManual = uiState.routeRunMode == RouteRunMode.MANUAL
     val routePoints = uiState.routePoints
+
+    // 「记录路线」状态(前台采集服务,真实 GPS)
+    val routeRecordState by viewModel.routeRecordController.recordState.collectAsState()
+    var showRecordSaveDialog by remember { mutableStateOf(false) }
 
     val submitSearch: () -> Unit = {
         focusManager.clearFocus()
@@ -443,6 +451,18 @@ fun RouteTab(
                             icon = Icons.Rounded.Bookmarks,
                             onClick = { showSavedRoutesDialog = true }
                         )
+                        val recState = routeRecordState
+                        RouteControlButton(
+                            icon = if (recState != null && !recState.finished) Icons.Rounded.Stop else Icons.Rounded.FiberManualRecord,
+                            onClick = {
+                                if (recState != null && !recState.finished) {
+                                    viewModel.stopRouteRecording()
+                                    showRecordSaveDialog = true
+                                } else {
+                                    viewModel.startRouteRecording()
+                                }
+                            }
+                        )
                         RouteControlButton(
                             icon = Icons.Rounded.MyLocation,
                             onClick = {
@@ -684,6 +704,64 @@ fun RouteTab(
             bottomActionHeightDp = bottomActionHeightDp,
             bottomBarHeight = bottomBarHeight,
             onDismiss = { showSavedRoutesDialog = false }
+        )
+    }
+
+    val recSnapshot = routeRecordState
+    if (recSnapshot != null && !recSnapshot.finished) {
+        val st = recSnapshot
+        val elapsedSec = st.elapsedMs / 1000
+        val timeText = String.format("%02d:%02d", elapsedSec / 60, elapsedSec % 60)
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("正在记录路线") },
+            text = {
+                Column {
+                    Text("已记录 ${st.pointCount} 个点位 · ${"%.0f".format(st.distanceM)} 米")
+                    Text("用时 $timeText", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    Text("沿实际路线行走,结束后保存到路线库", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.stopRouteRecording()
+                    showRecordSaveDialog = true
+                }) { Text("结束并保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.stopRouteRecording(); viewModel.discardRecordedRoute() }) { Text("放弃") }
+            }
+        )
+    }
+
+    val finishedSnapshot = routeRecordState
+    if (showRecordSaveDialog && finishedSnapshot != null && finishedSnapshot.finished) {
+        var recordName by remember { mutableStateOf("记录路线") }
+        AlertDialog(
+            onDismissRequest = { viewModel.discardRecordedRoute(); showRecordSaveDialog = false },
+            title = { Text("保存路线") },
+            text = {
+                Column {
+                    Text("共 ${finishedSnapshot.pointCount} 个点位 · ${"%.0f".format(finishedSnapshot.distanceM)} 米")
+                    Spacer(Modifier.height(12.dp))
+                    TextField(
+                        value = recordName,
+                        onValueChange = { recordName = it },
+                        singleLine = true,
+                        label = { Text("路线名称") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.saveRecordedRoute(recordName)
+                    showRecordSaveDialog = false
+                }) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.discardRecordedRoute(); showRecordSaveDialog = false }) { Text("丢弃") }
+            }
         )
     }
 }

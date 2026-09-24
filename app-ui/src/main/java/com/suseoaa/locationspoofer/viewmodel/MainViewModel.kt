@@ -9,6 +9,7 @@ import com.suseoaa.locationspoofer.data.model.AppMapType
 import com.suseoaa.locationspoofer.data.model.MapEngine
 import com.suseoaa.locationspoofer.data.model.RootSolution
 import com.suseoaa.locationspoofer.data.repository.LocationRepository
+import com.suseoaa.locationspoofer.data.repository.RouteRecordController
 import com.suseoaa.locationspoofer.data.repository.SettingsRepository
 import com.suseoaa.locationspoofer.data.repository.WifiRepository
 import com.suseoaa.locationspoofer.data.state.SpoofingState
@@ -35,7 +36,8 @@ class MainViewModel(
     internal val environmentDao: EnvironmentDao,
     internal val wifiRepository: WifiRepository,
     internal val opencellidClient: OpenCellIdClient,
-    internal val context: Context
+    internal val context: Context,
+    internal val routeRecordController: RouteRecordController
 ) : ViewModel() {
     internal var lastMapMoveTime = 0L
     internal var mapMoveJob: Job? = null
