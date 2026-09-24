@@ -46,7 +46,10 @@ class ConfigManager(private val context: Context, private val rootManager: RootM
         stopAtDestination: Boolean = false,
         enableStepSimulation: Boolean = true,
         stepCadenceSpm: Int = 165,
-        isAutoCadence: Boolean = true
+        isAutoCadence: Boolean = true,
+        minPaceSecPerKm: Double = 0.0,
+        maxPaceSecPerKm: Double = 0.0,
+        slowPatches: Boolean = true
     ) = withContext(Dispatchers.IO) {
         val routeArray = JSONArray()
         routePoints.forEach { p ->
@@ -139,6 +142,10 @@ class ConfigManager(private val context: Context, private val rootManager: RootM
             put("enable_step_simulation", enableStepSimulation)
             put("step_cadence_spm", stepCadenceSpm)
             put("is_auto_cadence", isAutoCadence)
+            // P1-1 配速曲线：最快/最慢配速（秒/公里，0=不限制）与微停顿开关
+            put("min_pace_sec_per_km", minPaceSecPerKm)
+            put("max_pace_sec_per_km", maxPaceSecPerKm)
+            put("slow_patches", slowPatches)
 
             val coordSysObj = JSONObject()
             appCoordinateSystems.forEach { (pkg, sys) -> coordSysObj.put(pkg, sys) }

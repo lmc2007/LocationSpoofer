@@ -151,3 +151,30 @@ internal fun LocationHooker.getJitteredAccuracy(): Float {
     hookAccuracyDrift += 0.1 * rng.nextGaussian() - 0.05 * hookAccuracyDrift
     return (2.2 + hookAccuracyDrift).coerceIn(1.5, 3.5).toFloat()
 }
+
+/**
+ * 为伪造 Location 补齐 API 26+ 质量精度字段（垂直/速度/航向精度）。
+ * 真实 GPS 每个定位点都携带这三个精度估计；注入的 Location 若缺失（读取为 0），
+ * 高德系轨迹 SDK 会把点判为低质量 —— 表现为轨迹点标红（ isValidPoint 满分也救不回 UI 渲染）。
+ */
+internal fun LocationHooker.enrichLocationQuality(loc: Any, speedMs: Float, moving: Boolean) {
+    try {
+        // 垂直精度：4-12m，OU 慢漂（真实 GNSS 海拔解算质量随几何精度因子波动）
+        hookVertAcc += 0.3 * rng.nextGaussian() - 0.05 * hookVertAcc
+        XposedHelpers.callMethod(
+            loc, "setVerticalAccuracyMeters",
+            (8.0 + hookVertAcc).coerceIn(4.0, 12.0).toFloat()
+        )
+    } catch (_: Throwable) {}
+    try {
+        // 速度精度：与速度正相关（高速时多普勒解算更差），0.3-1.6 m/s
+        val sa = (0.4f + speedMs * 0.15f + (0.1f * rng.nextGaussian()).toFloat()).coerceIn(0.3f, 1.6f)
+        XposedHelpers.callMethod(loc, "setSpeedAccuracyMetersPerSecond", sa)
+    } catch (_: Throwable) {}
+    try {
+        // 航向精度：运动时 5-15°（GPS 航向由连续位移解算，速度越高越准），静止 35-75°
+        val ba = if (moving) (10.0f + (3.0f * rng.nextGaussian()).toFloat()).coerceIn(5.0f, 15.0f)
+                 else (55.0f + (10.0f * rng.nextGaussian()).toFloat()).coerceIn(35.0f, 75.0f)
+        XposedHelpers.callMethod(loc, "setBearingAccuracyDegrees", ba)
+    } catch (_: Throwable) {}
+}

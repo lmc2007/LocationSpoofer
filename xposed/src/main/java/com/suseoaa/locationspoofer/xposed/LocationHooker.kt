@@ -131,6 +131,8 @@ class LocationHooker : XposedModule() {
         capturedBaiduListeners.clear()
         capturedTencentListeners.clear()
         capturedFusedLocationCallbacks.clear()
+        // 步时钟线程必须停掉，否则热重载后泄漏一个每 200ms 醒来的 HandlerThread
+        try { com.suseoaa.locationspoofer.xposed.hooks.gait.StepEventScheduler.shutdownForReload() } catch (_: Throwable) {}
         return true
     }
 
@@ -219,6 +221,7 @@ class LocationHooker : XposedModule() {
         // 反检测: 必须在其他Hook之前安装,隐藏Xposed环境
         hookAntiDetection(classLoader)
 
+
         hookLocationAPIs(classLoader, pkg)
         hookGnssStatus(classLoader)
 
@@ -287,6 +290,7 @@ class LocationHooker : XposedModule() {
     internal var hookDriftLat = 0.0
     internal var hookDriftLng = 0.0
     internal var hookAccuracyDrift = 0.0
+    internal var hookVertAcc = 0.0
     internal var hookLastCallTime = 0L
 
     /**
@@ -314,6 +318,8 @@ class LocationHooker : XposedModule() {
     @Volatile
     internal var configPollIntervalMs = 1_000L
     internal val pollingLock = Any()
+    @Volatile
+    internal var lastDiagPushAt = 0L
     internal val localConfigPath = "/data/local/tmp/locationspoofer_config.json"
     internal val systemConfigPath = "/data/system/locationspoofer_config.json"
     internal val appDataConfigPath = "/data/data/com.suseoaa.locationspoofer/files/locationspoofer_config.json"
@@ -482,6 +488,13 @@ class LocationHooker : XposedModule() {
                                     val pushAccuracy = if (isStationary) 2.5f else getJitteredAccuracy()
                                     val pushAltitude = newConfig.optDouble("altitude", 25.0)
 
+                                    // 诊断日志（3s 节流）：真机验证伪造定位推送与步时钟状态
+                                    val diagNow = android.os.SystemClock.elapsedRealtime()
+                                    if (newConfig.optBoolean("diag_logs", true) && diagNow - lastDiagPushAt > 3000L) {
+                                        lastDiagPushAt = diagNow
+                                        XposedBridge.log("[DIAG] push lat=$pushLat lng=$pushLng bearing=$pushBearing speed=$pushSpeed acc=$pushAccuracy alt=$pushAltitude stationary=$isStationary cadence=${com.suseoaa.locationspoofer.xposed.hooks.gait.StepEventScheduler.currentCadence} steps=${com.suseoaa.locationspoofer.xposed.hooks.gait.StepEventScheduler.totalSteps}")
+                                    }
+
                                     val mainHandler = try {
                                         android.os.Handler(android.os.Looper.getMainLooper())
                                     } catch (_: Throwable) {
@@ -509,6 +522,7 @@ class LocationHooker : XposedModule() {
                                                     XposedHelpers.callMethod(mockLoc, "setSpeed", pushSpeed)
                                                     XposedHelpers.callMethod(mockLoc, "setBearing", pushBearing)
                                                     XposedHelpers.callMethod(mockLoc, "setAltitude", pushAltitude)
+                                                    try { enrichLocationQuality(mockLoc, pushSpeed, !isStationary) } catch (_: Throwable) {}
                                                     XposedHelpers.callMethod(mockLoc, "setTime", timeNow)
                                                     XposedHelpers.callMethod(
                                                         mockLoc,
@@ -588,6 +602,7 @@ class LocationHooker : XposedModule() {
                                                     XposedHelpers.callMethod(mockLoc, "setSpeed", pushSpeed)
                                                     XposedHelpers.callMethod(mockLoc, "setBearing", pushBearing)
                                                     XposedHelpers.callMethod(mockLoc, "setAltitude", pushAltitude)
+                                                    try { enrichLocationQuality(mockLoc, pushSpeed, !isStationary) } catch (_: Throwable) {}
                                                     XposedHelpers.callMethod(mockLoc, "setTime", timeNow)
                                                     XposedHelpers.callMethod(
                                                         mockLoc,
@@ -666,6 +681,7 @@ class LocationHooker : XposedModule() {
                                                         "setAltitude",
                                                         pushAltitude
                                                     )
+                                                    try { enrichLocationQuality(mockAMapLoc, pushSpeed, !isStationary) } catch (_: Throwable) {}
                                                     XposedHelpers.callMethod(
                                                         mockAMapLoc,
                                                         "setTime",
@@ -722,6 +738,7 @@ class LocationHooker : XposedModule() {
                                                     XposedHelpers.callMethod(mockBDLoc, "setLocType", 61)
                                                     XposedHelpers.callMethod(mockBDLoc, "setSatelliteNumber", 20)
                                                     XposedHelpers.callMethod(mockBDLoc, "setGpsCheckStatus", 1)
+                                                    try { enrichLocationQuality(mockBDLoc, pushSpeed, !isStationary) } catch (_: Throwable) {}
                                                     try { XposedHelpers.callMethod(mockBDLoc, "setMockGps", 0) } catch (_: Throwable) {}
                                                     try { XposedHelpers.callMethod(mockBDLoc, "setTime", java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())) } catch (_: Throwable) {}
                                                     XposedHelpers.callMethod(
