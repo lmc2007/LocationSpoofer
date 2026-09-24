@@ -189,10 +189,7 @@ class FloatingJoystickService : Service(), LifecycleOwner, ViewModelStoreOwner,
 
         SpoofingState.latitude = Math.toDegrees(newLatRad)
         SpoofingState.longitude = Math.toDegrees(newLngRad)
-        // 注意:绝对不要在这里重置 startTimestamp。
-        // 它同时是"计步会话"的锚点 —— 重置会让 StepClockCore 重绑会话(步数基线重解析),
-        // 导致 counter 出现跳变,微信等按差值累计步数的宿主会把跳变记成新增步数(步数暴增)。
-        // 摇杆位置是绝对坐标增量推进,与 startTimestamp 无关,无需重置。
+        SpoofingState.startTimestamp = now // 将模拟开始时间重置为当前时间，以避免位置跳跃
 
         if (now - lastConfigSaveTime > 1000) {
             lastConfigSaveTime = now
